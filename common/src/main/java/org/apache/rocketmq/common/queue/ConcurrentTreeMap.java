@@ -22,21 +22,21 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantLock;
 import org.apache.rocketmq.common.constant.LoggerName;
-import org.apache.rocketmq.logging.InternalLogger;
-import org.apache.rocketmq.logging.InternalLoggerFactory;
+import org.apache.rocketmq.logging.org.slf4j.Logger;
+import org.apache.rocketmq.logging.org.slf4j.LoggerFactory;
 
 /**
  * thread safe
  */
 public class ConcurrentTreeMap<K, V> {
-    private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
+    private static final Logger log = LoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private final ReentrantLock lock;
     private TreeMap<K, V> tree;
     private RoundQueue<K> roundQueue;
 
     public ConcurrentTreeMap(int capacity, Comparator<? super K> comparator) {
-        tree = new TreeMap<K, V>(comparator);
-        roundQueue = new RoundQueue<K>(capacity);
+        tree = new TreeMap<>(comparator);
+        roundQueue = new RoundQueue<>(capacity);
         lock = new ReentrantLock(true);
     }
 
@@ -53,16 +53,16 @@ public class ConcurrentTreeMap<K, V> {
         lock.lock();
         try {
             if (roundQueue.put(key)) {
-                V exsit = tree.get(key);
-                if (null == exsit) {
+                V exist = tree.get(key);
+                if (null == exist) {
                     tree.put(key, value);
-                    exsit = value;
+                    exist = value;
                 }
                 log.warn("putIfAbsentAndRetExsit success. " + key);
-                return exsit;
+                return exist;
             } else {
-                V exsit = tree.get(key);
-                return exsit;
+                V exist = tree.get(key);
+                return exist;
             }
         } finally {
             lock.unlock();

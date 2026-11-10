@@ -24,20 +24,24 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.apache.rocketmq.common.UtilAll;
-import org.apache.rocketmq.logging.InternalLogger;
+import org.apache.rocketmq.common.constant.LoggerName;
+import org.apache.rocketmq.logging.org.slf4j.Logger;
+import org.apache.rocketmq.logging.org.slf4j.LoggerFactory;
 
 public class StatsItemSet {
+    private static final Logger COMMERCIAL_LOG = LoggerFactory.getLogger(LoggerName.COMMERCIAL_LOGGER_NAME);
     private final ConcurrentMap<String/* key */, StatsItem> statsItemTable =
-        new ConcurrentHashMap<String, StatsItem>(128);
+        new ConcurrentHashMap<>(128);
 
     private final String statsName;
     private final ScheduledExecutorService scheduledExecutorService;
-    private final InternalLogger log;
 
-    public StatsItemSet(String statsName, ScheduledExecutorService scheduledExecutorService, InternalLogger log) {
+    private final Logger logger;
+
+    public StatsItemSet(String statsName, ScheduledExecutorService scheduledExecutorService, Logger logger) {
+        this.logger = logger;
         this.statsName = statsName;
         this.scheduledExecutorService = scheduledExecutorService;
-        this.log = log;
         this.init();
     }
 
@@ -156,12 +160,14 @@ public class StatsItemSet {
         StatsItem statsItem = this.getAndCreateStatsItem(statsKey);
         statsItem.getValue().add(incValue);
         statsItem.getTimes().add(incTimes);
+        statsItem.setLastUpdateTimestamp(System.currentTimeMillis());
     }
 
     public void addRTValue(final String statsKey, final int incValue, final int incTimes) {
         StatsItem statsItem = this.getAndCreateRTStatsItem(statsKey);
         statsItem.getValue().add(incValue);
         statsItem.getTimes().add(incTimes);
+        statsItem.setLastUpdateTimestamp(System.currentTimeMillis());
     }
 
     public void delValue(final String statsKey) {
@@ -213,9 +219,9 @@ public class StatsItemSet {
         StatsItem statsItem = this.statsItemTable.get(statsKey);
         if (null == statsItem) {
             if (rtItem) {
-                statsItem = new RTStatsItem(this.statsName, statsKey, this.scheduledExecutorService, this.log);
+                statsItem = new RTStatsItem(this.statsName, statsKey, this.scheduledExecutorService, logger);
             } else {
-                statsItem = new StatsItem(this.statsName, statsKey, this.scheduledExecutorService, this.log);
+                statsItem = new StatsItem(this.statsName, statsKey, this.scheduledExecutorService, logger);
             }
             StatsItem prev = this.statsItemTable.putIfAbsent(statsKey, statsItem);
 
@@ -254,5 +260,19 @@ public class StatsItemSet {
 
     public StatsItem getStatsItem(final String statsKey) {
         return this.statsItemTable.get(statsKey);
+    }
+
+
+    public void cleanResource(int maxStatsIdleTimeInMinutes) {
+        COMMERCIAL_LOG.info("CleanStatisticItemOld: kind:{}, size:{}", statsName, this.statsItemTable.size());
+        Iterator<Entry<String, StatsItem>> it = this.statsItemTable.entrySet().iterator();
+        while (it.hasNext()) {
+            Entry<String, StatsItem> next = it.next();
+            StatsItem statsItem = next.getValue();
+            if (System.currentTimeMillis() - statsItem.getLastUpdateTimestamp() > maxStatsIdleTimeInMinutes * 60 * 1000L) {
+                it.remove();
+                COMMERCIAL_LOG.info("CleanStatisticItemOld: removeKind:{}, removeKey:{}", statsName, statsItem.getStatsKey());
+            }
+        }
     }
 }

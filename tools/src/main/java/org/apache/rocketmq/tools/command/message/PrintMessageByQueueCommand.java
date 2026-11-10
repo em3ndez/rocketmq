@@ -74,7 +74,7 @@ public class PrintMessageByQueueCommand implements SubCommand {
         if (!calByTag)
             return;
 
-        List<TagCountBean> list = new ArrayList<TagCountBean>();
+        List<TagCountBean> list = new ArrayList<>();
         for (Map.Entry<String, AtomicLong> entry : tagCalmap.entrySet()) {
             TagCountBean tagBean = new TagCountBean(entry.getKey(), entry.getValue());
             list.add(tagBean);
@@ -108,7 +108,7 @@ public class PrintMessageByQueueCommand implements SubCommand {
 
     @Override
     public String commandDesc() {
-        return "Print Message Detail";
+        return "Print Message Detail by queueId.";
     }
 
     @Override
@@ -193,7 +193,7 @@ public class PrintMessageByQueueCommand implements SubCommand {
                 maxOffset = consumer.searchOffset(mq, timeValue);
             }
 
-            final Map<String, AtomicLong> tagCalmap = new HashMap<String, AtomicLong>();
+            final Map<String, AtomicLong> tagCalmap = new HashMap<>();
             READQ:
             for (long offset = minOffset; offset < maxOffset; ) {
                 try {
@@ -250,7 +250,11 @@ public class PrintMessageByQueueCommand implements SubCommand {
 
         @Override
         public int compareTo(final TagCountBean o) {
-            return (int) (o.getCount().get() - this.count.get());
+            // Tag counts are longs that may exceed Integer.MAX_VALUE; the previous
+            // (int) (o.count - this.count) form truncated the difference, which
+            // inverted the order and violated the Comparable contract used by
+            // Collections.sort. Long.compare keeps the full 64-bit ordering.
+            return Long.compare(o.getCount().get(), this.count.get());
         }
     }
 }

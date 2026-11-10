@@ -4,7 +4,7 @@
 
 ### 1 Single Master mode
 
-This is the simplest, but also the riskiest mode, that makes the entire service unavailable once the broker restarts or goes down. Production environments are not recommended, but can be used for local testing and development. Here are the steps to build.
+This is the simplest, but also the riskiest mode, that makes the entire service unavailable once the broker restarts or goes down. Production environments are not recommended, but it can be used for local testing and development. Here are the steps to build.
 
 **1）Start NameServer**
 
@@ -27,7 +27,7 @@ $ nohup sh bin/mqbroker -n localhost:9876 &
 
 ### Then verify that the broker is started successfully, for example, the IP of broker is 192.168.1.2 and the name is broker-a
 $ tail -f ~/logs/rocketmqlogs/Broker.log 
-The broker[broker-a,192.169.1.2:10911] boot success...
+The broker[broker-a,192.168.1.2:10911] boot success...
 ```
 
 We can see 'The broker[brokerName,ip:port] boot success..' in Broker.log that indicates the broker has been started successfully.
@@ -69,7 +69,7 @@ $ nohup sh mqbroker -n 192.168.1.1:9876 -c $ROCKETMQ_HOME/conf/2m-noslave/broker
 ...
 ```
 
-The boot command shown above is used in the case of a single NameServer.For clusters of multiple NameServer, the address list after the -n argument in the broker boot command is separated by semicolons, for example, 192.168.1.1: 9876;192.161.2: 9876.
+The boot command shown above is used in the case of a single NameServer.For clusters of multiple NameServer, the address list after the -n argument in the broker boot command is separated by semicolons, for example, 192.168.1.1: 9876;192.168.1.2: 9876.
 
 ### 3 Multiple Master And Multiple Slave Mode-Asynchronous replication
 

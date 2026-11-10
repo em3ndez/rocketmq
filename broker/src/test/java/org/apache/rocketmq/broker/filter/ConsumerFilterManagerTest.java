@@ -17,17 +17,16 @@
 
 package org.apache.rocketmq.broker.filter;
 
-import org.apache.rocketmq.common.UtilAll;
-import org.apache.rocketmq.common.filter.ExpressionType;
-import org.apache.rocketmq.common.filter.FilterAPI;
-import org.apache.rocketmq.common.protocol.heartbeat.SubscriptionData;
-import org.junit.Test;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import org.apache.rocketmq.common.UtilAll;
+import org.apache.rocketmq.common.filter.ExpressionType;
+import org.apache.rocketmq.remoting.protocol.filter.FilterAPI;
+import org.apache.rocketmq.remoting.protocol.heartbeat.SubscriptionData;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,9 +80,7 @@ public class ConsumerFilterManagerTest {
     public void testRegister_change() {
         ConsumerFilterManager filterManager = gen(10, 10);
 
-        ConsumerFilterData filterData = filterManager.get("topic9", "CID_9");
-
-        System.out.println(filterData.getCompiledExpression());
+        ConsumerFilterData filterData;
 
         String newExpr = "a > 0 and a < 10";
 
@@ -92,8 +89,6 @@ public class ConsumerFilterManagerTest {
         filterData = filterManager.get("topic9", "CID_9");
 
         assertThat(newExpr).isEqualTo(filterData.getExpression());
-
-        System.out.println(filterData.toString());
     }
 
     @Test
@@ -182,7 +177,9 @@ public class ConsumerFilterManagerTest {
             ConsumerFilterData filterData = iterator.next();
 
             assertThat(filterData).isNotNull();
-            assertThat(filterManager.getBloomFilter().isValid(filterData.getBloomFilterData())).isTrue();
+            if (null != filterData.getBloomFilterData()) {
+                assertThat(filterManager.getBloomFilter().isValid(filterData.getBloomFilterData())).isTrue();
+            }
         }
     }
 
@@ -192,9 +189,9 @@ public class ConsumerFilterManagerTest {
 
         assertThat(filterManager.register("topic0", "CID_0", "*", null, System.currentTimeMillis())).isFalse();
 
-        Collection<ConsumerFilterData> filterDatas = filterManager.getByGroup("CID_0");
+        ConsumerFilterData filterDatas = filterManager.get("topic0", "CID_0");
 
-        assertThat(filterDatas).isNullOrEmpty();
+        assertThat(filterDatas).isNull();
     }
 
     @Test
@@ -272,6 +269,43 @@ public class ConsumerFilterManagerTest {
         } finally {
             UtilAll.deleteFile(new File("./unit_test"));
         }
+    }
+
+    @Test
+    public void testRegister_bySubscriptionData_shrinkMakesDead() {
+        ConsumerFilterManager filterManager = new ConsumerFilterManager();
+        List<SubscriptionData> subscriptionDatas = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            try {
+                subscriptionDatas.add(
+                    FilterAPI.build("topic" + i, "a is not null and a > " + i, ExpressionType.SQL92)
+                );
+            } catch (Exception e) {
+                assertThat(true).isFalse();
+            }
+        }
+
+        filterManager.register("CID_0", subscriptionDatas);
+
+        ConsumerFilterData topic2Data = filterManager.get("topic2", "CID_0");
+        assertThat(topic2Data).isNotNull();
+        assertThat(topic2Data.isDead()).isFalse();
+
+        // shrink: remove topic2 from subscription list
+        List<SubscriptionData> shrunkList = new ArrayList<>(subscriptionDatas.subList(0, 2));
+        filterManager.register("CID_0", shrunkList);
+
+        // topic2 should be marked dead
+        assertThat(topic2Data.isDead()).isTrue();
+
+        // topic0 and topic1 should still be alive
+        ConsumerFilterData topic0Data = filterManager.get("topic0", "CID_0");
+        assertThat(topic0Data).isNotNull();
+        assertThat(topic0Data.isDead()).isFalse();
+
+        ConsumerFilterData topic1Data = filterManager.get("topic1", "CID_0");
+        assertThat(topic1Data).isNotNull();
+        assertThat(topic1Data.isDead()).isFalse();
     }
 
 }

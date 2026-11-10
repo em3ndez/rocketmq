@@ -26,7 +26,7 @@ import org.junit.Test;
 public class MessageBatchTest {
 
     public List<Message> generateMessages() {
-        List<Message> messages = new ArrayList<Message>();
+        List<Message> messages = new ArrayList<>();
         Message message1 = new Message("topic1", "body".getBytes());
         Message message2 = new Message("topic1", "body".getBytes());
 
@@ -39,6 +39,16 @@ public class MessageBatchTest {
     public void testGenerate_OK() throws Exception {
         List<Message> messages = generateMessages();
         MessageBatch.generateFromList(messages);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testGenerate_NullMessages() throws Exception {
+        MessageBatch.generateFromList(null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testGenerate_EmptyMessages() throws Exception {
+        MessageBatch.generateFromList(new ArrayList<>());
     }
 
     @Test(expected = UnsupportedOperationException.class)

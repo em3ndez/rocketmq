@@ -17,6 +17,11 @@
 
 package org.apache.rocketmq.remoting.protocol;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 public enum LanguageCode {
     JAVA((byte) 0),
     CPP((byte) 1),
@@ -30,7 +35,21 @@ public enum LanguageCode {
     GO((byte) 9),
     PHP((byte) 10),
     OMS((byte) 11),
-    RUST((byte) 12);
+    RUST((byte) 12),
+    NODE_JS((byte) 13);
+
+    private static final LanguageCode[] BY_CODE;
+    static {
+        LanguageCode[] all = values();
+        int max = 0;
+        for (LanguageCode lc : all) {
+            max = Math.max(max, lc.code & 0xFF);
+        }
+        BY_CODE = new LanguageCode[max + 1];
+        for (LanguageCode lc : all) {
+            BY_CODE[lc.code & 0xFF] = lc;
+        }
+    }
 
     private byte code;
 
@@ -39,15 +58,17 @@ public enum LanguageCode {
     }
 
     public static LanguageCode valueOf(byte code) {
-        for (LanguageCode languageCode : LanguageCode.values()) {
-            if (languageCode.getCode() == code) {
-                return languageCode;
-            }
-        }
-        return null;
+        int idx = code & 0xFF;
+        return idx < BY_CODE.length ? BY_CODE[idx] : null;
     }
 
     public byte getCode() {
         return code;
+    }
+    
+    private static final Map<String, LanguageCode> MAP = Arrays.stream(LanguageCode.values()).collect(Collectors.toMap(LanguageCode::name, Function.identity()));
+
+    public static LanguageCode getCode(String language) {
+        return MAP.get(language);
     }
 }

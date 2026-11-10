@@ -16,9 +16,6 @@
  */
 package org.apache.rocketmq.common.topic;
 
-import org.apache.rocketmq.common.protocol.ResponseCode;
-import org.apache.rocketmq.common.topic.TopicValidator;
-import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,34 +24,88 @@ public class TopicValidatorTest {
 
     @Test
     public void testTopicValidator_NotPass() {
-        RemotingCommand response = RemotingCommand.createResponseCommand(-1, "");
+        TopicValidator.ValidateResult res = TopicValidator.validateTopic("");
+        assertThat(res.isValid()).isFalse();
+        assertThat(res.getRemark()).contains("The specified topic is blank");
 
-        Boolean res = TopicValidator.validateTopic("", response);
-        assertThat(res).isFalse();
-        assertThat(response.getCode()).isEqualTo(ResponseCode.SYSTEM_ERROR);
-        assertThat(response.getRemark()).contains("The specified topic is blank");
+        res = TopicValidator.validateTopic("../TopicTest");
+        assertThat(res.isValid()).isFalse();
 
-        clearResponse(response);
-        res = TopicValidator.validateTopic("../TopicTest", response);
-        assertThat(res).isFalse();
-        assertThat(response.getCode()).isEqualTo(ResponseCode.SYSTEM_ERROR);
-        assertThat(response.getRemark()).contains("The specified topic contains illegal characters");
+        res = TopicValidator.validateTopic(generateString(128));
+        assertThat(res.isValid()).isFalse();
 
-        clearResponse(response);
-        res = TopicValidator.validateTopic(generateString(128), response);
-        assertThat(res).isFalse();
-        assertThat(response.getCode()).isEqualTo(ResponseCode.SYSTEM_ERROR);
-        assertThat(response.getRemark()).contains("The specified topic is longer than topic max length.");
+        res = TopicValidator.validateTopic(generateRetryTopic(256));
+        assertThat(res.isValid()).isFalse();
+
+        res = TopicValidator.validateTopic(generateDlqTopic(256));
+        assertThat(res.isValid()).isFalse();
     }
 
     @Test
     public void testTopicValidator_Pass() {
-        RemotingCommand response = RemotingCommand.createResponseCommand(-1, "");
+        TopicValidator.ValidateResult res = TopicValidator.validateTopic("TestTopic");
+        assertThat(res.isValid()).isTrue();
+        assertThat(res.getRemark()).isEmpty();
 
-        Boolean res = TopicValidator.validateTopic("TestTopic", response);
-        assertThat(res).isTrue();
-        assertThat(response.getCode()).isEqualTo(-1);
-        assertThat(response.getRemark()).isEmpty();
+        res = TopicValidator.validateTopic(generateString2(127));
+        assertThat(res.isValid()).isTrue();
+        assertThat(res.getRemark()).isEmpty();
+
+        res = TopicValidator.validateTopic(generateRetryTopic(255));
+        assertThat(res.isValid()).isTrue();
+        assertThat(res.getRemark()).isEmpty();
+
+        res = TopicValidator.validateTopic(generateDlqTopic(255));
+        assertThat(res.isValid()).isTrue();
+        assertThat(res.getRemark()).isEmpty();
+    }
+
+    @Test
+    public void testGroupValidator_Pass() {
+        TopicValidator.ValidateResult res = TopicValidator.validateGroup("TestGroup");
+        assertThat(res.isValid()).isTrue();
+        assertThat(res.getRemark()).isEmpty();
+
+        res = TopicValidator.validateGroup(generateString2(120));
+        assertThat(res.isValid()).isTrue();
+        assertThat(res.getRemark()).isEmpty();
+    }
+
+    @Test
+    public void testGroupValidator__NotPass() {
+        TopicValidator.ValidateResult res = TopicValidator.validateGroup("");
+        assertThat(res.isValid()).isFalse();
+        assertThat(res.getRemark()).contains("The specified group is blank");
+
+        res = TopicValidator.validateGroup("../GroupTest");
+        assertThat(res.isValid()).isFalse();
+
+        res = TopicValidator.validateGroup(generateString(120));
+        assertThat(res.isValid()).isFalse();
+
+        res = TopicValidator.validateGroup(generateString2(121));
+        assertThat(res.isValid()).isFalse();
+    }
+
+    @Test
+    public void testGroupValidator_WithCustomMaxLength() {
+        try {
+            TopicValidator.setGroupMaxLength(255);
+            assertThat(TopicValidator.validateGroup(generateString2(255)).isValid()).isTrue();
+            assertThat(TopicValidator.validateGroup(generateString2(256)).isValid()).isFalse();
+
+            // values above 255 are capped at 255
+            TopicValidator.setGroupMaxLength(300);
+            assertThat(TopicValidator.validateGroup(generateString2(255)).isValid()).isTrue();
+            assertThat(TopicValidator.validateGroup(generateString2(256)).isValid()).isFalse();
+
+            // non-positive values fall back to the default of 120
+            TopicValidator.setGroupMaxLength(0);
+            assertThat(TopicValidator.validateGroup(generateString2(120)).isValid()).isTrue();
+            assertThat(TopicValidator.validateGroup(generateString2(121)).isValid()).isFalse();
+        } finally {
+            TopicValidator.setGroupMaxLength(120);
+        }
     }
 
     @Test
@@ -83,17 +134,14 @@ public class TopicValidatorTest {
 
     @Test
     public void testIsSystemTopicWithResponse() {
-        RemotingCommand response = RemotingCommand.createResponseCommand(-1, "");
         boolean res;
         for (String topic : TopicValidator.getSystemTopicSet()) {
-            res = TopicValidator.isSystemTopic(topic, response);
+            res = TopicValidator.isSystemTopic(topic);
             assertThat(res).isTrue();
-            assertThat(response.getCode()).isEqualTo(ResponseCode.SYSTEM_ERROR);
-            assertThat(response.getRemark()).isEqualTo("The topic[" + topic + "] is conflict with system topic.");
         }
 
         String topic = "test_not_system_topic";
-        res = TopicValidator.isSystemTopic(topic, response);
+        res = TopicValidator.isSystemTopic(topic);
         assertThat(res).isFalse();
     }
 
@@ -111,25 +159,22 @@ public class TopicValidatorTest {
     }
 
     @Test
-    public void testIsNotAllowedSendTopicWithResponse() {
-        RemotingCommand response = RemotingCommand.createResponseCommand(-1, "");
+    public void testTimerTopicCannotBeSentByClient() {
+        assertThat(TopicValidator.isNotAllowedSendTopic(TopicValidator.RMQ_SYS_WHEEL_TIMER_TOPIC))
+            .isTrue();
+    }
 
+    @Test
+    public void testIsNotAllowedSendTopicWithResponse() {
         boolean res;
         for (String topic : TopicValidator.getNotAllowedSendTopicSet()) {
-            res = TopicValidator.isNotAllowedSendTopic(topic, response);
+            res = TopicValidator.isNotAllowedSendTopic(topic);
             assertThat(res).isTrue();
-            assertThat(response.getCode()).isEqualTo(ResponseCode.NO_PERMISSION);
-            assertThat(response.getRemark()).isEqualTo("Sending message to topic[" + topic + "] is forbidden.");
         }
 
         String topic = "test_allowed_send_topic";
-        res = TopicValidator.isNotAllowedSendTopic(topic, response);
+        res = TopicValidator.isNotAllowedSendTopic(topic);
         assertThat(res).isFalse();
-    }
-
-    private static void clearResponse(RemotingCommand response) {
-        response.setCode(-1);
-        response.setRemark("");
     }
 
     private static String generateString(int length) {
@@ -139,5 +184,31 @@ public class TopicValidatorTest {
             stringBuffer.append(tmpStr);
         }
         return stringBuffer.toString();
+    }
+
+    private static String generateString2(int length) {
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            stringBuilder.append("a");
+        }
+        return stringBuilder.toString();
+    }
+
+    private static String generateRetryTopic(int length) {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append("%RETRY%");
+        for (int i = 0; i < length - 7; i++) {
+            stringBuilder.append("a");
+        }
+        return stringBuilder.toString();
+    }
+
+    private static String generateDlqTopic(int length) {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append("%DLQ%");
+        for (int i = 0; i < length - 5; i++) {
+            stringBuilder.append("a");
+        }
+        return stringBuilder.toString();
     }
 }

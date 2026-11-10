@@ -23,11 +23,11 @@ import java.io.IOException;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 import org.apache.rocketmq.common.constant.LoggerName;
-import org.apache.rocketmq.logging.InternalLogger;
-import org.apache.rocketmq.logging.InternalLoggerFactory;
+import org.apache.rocketmq.logging.org.slf4j.Logger;
+import org.apache.rocketmq.logging.org.slf4j.LoggerFactory;
 
 public class ZlibCompressor implements Compressor {
-    private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.COMMON_LOGGER_NAME);
+    private static final Logger log = LoggerFactory.getLogger(LoggerName.COMMON_LOGGER_NAME);
 
     @Override
     public byte[] compress(byte[] src, int level) throws IOException {
@@ -41,7 +41,6 @@ public class ZlibCompressor implements Compressor {
             deflaterOutputStream.close();
             result = byteArrayOutputStream.toByteArray();
         } catch (IOException e) {
-            defeater.end();
             throw e;
         } finally {
             try {

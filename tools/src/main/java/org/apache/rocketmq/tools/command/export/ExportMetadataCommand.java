@@ -16,26 +16,26 @@
  */
 package org.apache.rocketmq.tools.command.export;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
-import com.alibaba.fastjson.JSON;
-
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.TopicConfig;
-import org.apache.rocketmq.common.protocol.body.SubscriptionGroupWrapper;
-import org.apache.rocketmq.common.protocol.body.TopicConfigSerializeWrapper;
-import org.apache.rocketmq.common.subscription.SubscriptionGroupConfig;
 import org.apache.rocketmq.remoting.RPCHook;
+import org.apache.rocketmq.remoting.protocol.body.SubscriptionGroupWrapper;
+import org.apache.rocketmq.remoting.protocol.body.TopicConfigSerializeWrapper;
+import org.apache.rocketmq.remoting.protocol.subscription.SubscriptionGroupConfig;
 import org.apache.rocketmq.srvutil.ServerUtil;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.apache.rocketmq.tools.command.CommandUtil;
 import org.apache.rocketmq.tools.command.SubCommand;
 import org.apache.rocketmq.tools.command.SubCommandException;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 public class ExportMetadataCommand implements SubCommand {
 
@@ -48,7 +48,7 @@ public class ExportMetadataCommand implements SubCommand {
 
     @Override
     public String commandDesc() {
-        return "export metadata";
+        return "Export metadata.";
     }
 
     @Override
@@ -101,13 +101,13 @@ public class ExportMetadataCommand implements SubCommand {
                     filePath = filePath + "/topic.json";
                     TopicConfigSerializeWrapper topicConfigSerializeWrapper = defaultMQAdminExt.getUserTopicConfig(
                         brokerAddr, specialTopic, 10000L);
-                    MixAll.string2FileNotSafe(JSON.toJSONString(topicConfigSerializeWrapper, true), filePath);
+                    MixAll.string2FileNotSafe(JSON.toJSONString(topicConfigSerializeWrapper, JSONWriter.Feature.PrettyFormat), filePath);
                     System.out.printf("export %s success", filePath);
                 } else if (commandLine.hasOption('g')) {
                     filePath = filePath + "/subscriptionGroup.json";
                     SubscriptionGroupWrapper subscriptionGroupWrapper = defaultMQAdminExt.getUserSubscriptionGroup(
                         brokerAddr, 10000L);
-                    MixAll.string2FileNotSafe(JSON.toJSONString(subscriptionGroupWrapper, true), filePath);
+                    MixAll.string2FileNotSafe(JSON.toJSONString(subscriptionGroupWrapper, JSONWriter.Feature.PrettyFormat), filePath);
                     System.out.printf("export %s success", filePath);
                 }
             } else if (commandLine.hasOption('c')) {
@@ -165,7 +165,7 @@ public class ExportMetadataCommand implements SubCommand {
                     exportPath = filePath + "/metadata.json";
                 }
                 result.put("exportTime", System.currentTimeMillis());
-                MixAll.string2FileNotSafe(JSON.toJSONString(result, true), exportPath);
+                MixAll.string2FileNotSafe(JSON.toJSONString(result, JSONWriter.Feature.PrettyFormat), exportPath);
                 System.out.printf("export %s success%n", exportPath);
 
             } else {

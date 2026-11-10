@@ -35,8 +35,10 @@ public class StoreCheckpointTest {
         StoreCheckpoint storeCheckpoint = new StoreCheckpoint("target/checkpoint_test/0000");
         long physicMsgTimestamp = 0xAABB;
         long logicsMsgTimestamp = 0xCCDD;
+        long logicsPhysicalOffset = 0x1000L;
         storeCheckpoint.setPhysicMsgTimestamp(physicMsgTimestamp);
         storeCheckpoint.setLogicsMsgTimestamp(logicsMsgTimestamp);
+        storeCheckpoint.setLogicsPhysicalOffset(logicsPhysicalOffset);
         storeCheckpoint.flush();
 
         long diff = physicMsgTimestamp - storeCheckpoint.getMinTimestamp();
@@ -45,10 +47,11 @@ public class StoreCheckpointTest {
         storeCheckpoint = new StoreCheckpoint("target/checkpoint_test/0000");
         assertThat(storeCheckpoint.getPhysicMsgTimestamp()).isEqualTo(physicMsgTimestamp);
         assertThat(storeCheckpoint.getLogicsMsgTimestamp()).isEqualTo(logicsMsgTimestamp);
+        assertThat(storeCheckpoint.getLogicsPhysicalOffset()).isEqualTo(logicsPhysicalOffset);
     }
 
     @After
-    public void destory() {
+    public void destroy() {
         File file = new File("target/checkpoint_test");
         UtilAll.deleteFile(file);
     }

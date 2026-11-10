@@ -18,7 +18,7 @@ package org.apache.rocketmq.remoting;
 
 import io.netty.channel.Channel;
 import java.util.concurrent.ExecutorService;
-import org.apache.rocketmq.remoting.common.Pair;
+import org.apache.rocketmq.common.Pair;
 import org.apache.rocketmq.remoting.exception.RemotingSendRequestException;
 import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
@@ -36,6 +36,12 @@ public interface RemotingServer extends RemotingService {
 
     Pair<NettyRequestProcessor, ExecutorService> getProcessorPair(final int requestCode);
 
+    Pair<NettyRequestProcessor, ExecutorService> getDefaultProcessorPair();
+
+    RemotingServer newRemotingServer(int port);
+
+    void removeRemotingServer(int port);
+
     RemotingCommand invokeSync(final Channel channel, final RemotingCommand request,
         final long timeoutMillis) throws InterruptedException, RemotingSendRequestException,
         RemotingTimeoutException;
@@ -47,5 +53,8 @@ public interface RemotingServer extends RemotingService {
     void invokeOneway(final Channel channel, final RemotingCommand request, final long timeoutMillis)
         throws InterruptedException, RemotingTooMuchRequestException, RemotingTimeoutException,
         RemotingSendRequestException;
+
+    void writeResponse(final Channel channel, final RemotingCommand request, 
+        final RemotingCommand response, final java.util.function.Consumer<io.netty.util.concurrent.Future<?>> callback);
 
 }

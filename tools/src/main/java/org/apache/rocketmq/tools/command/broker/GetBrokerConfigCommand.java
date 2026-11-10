@@ -25,6 +25,7 @@ import java.util.Properties;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
+import org.apache.commons.cli.OptionGroup;
 import org.apache.commons.cli.Options;
 import org.apache.rocketmq.client.exception.MQBrokerException;
 import org.apache.rocketmq.remoting.RPCHook;
@@ -45,18 +46,16 @@ public class GetBrokerConfigCommand implements SubCommand {
 
     @Override
     public String commandDesc() {
-        return "Get broker config by cluster or special broker!";
+        return "Get broker config by cluster or special broker.";
     }
 
     @Override
     public Options buildCommandlineOptions(final Options options) {
-        Option opt = new Option("b", "brokerAddr", true, "get which broker");
-        opt.setRequired(false);
-        options.addOption(opt);
-
-        opt = new Option("c", "clusterName", true, "get which cluster");
-        opt.setRequired(false);
-        options.addOption(opt);
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("b", "brokerAddr", true, "get which broker"));
+        group.addOption(new Option("c", "clusterName", true, "get which cluster"));
+        group.setRequired(true);
+        options.addOptionGroup(group);
 
         return options;
     }
@@ -85,19 +84,28 @@ public class GetBrokerConfigCommand implements SubCommand {
                 Map<String, List<String>> masterAndSlaveMap
                     = CommandUtil.fetchMasterAndSlaveDistinguish(defaultMQAdminExt, clusterName);
 
-                for (Entry<String, List<String>> masterAndSlaveEntry : masterAndSlaveMap.entrySet()) {
+                for (String masterAddr : masterAndSlaveMap.keySet()) {
+
+                    if (masterAddr == null) {
+                        continue;
+                    }
 
                     getAndPrint(
-                            defaultMQAdminExt,
-                            String.format("============Master: %s============\n", masterAndSlaveEntry.getKey()),
-                            masterAndSlaveEntry.getKey()
+                        defaultMQAdminExt,
+                        String.format("============Master: %s============\n", masterAddr),
+                        masterAddr
                     );
-                    for (String slaveAddr : masterAndSlaveEntry.getValue()) {
+
+                    for (String slaveAddr : masterAndSlaveMap.get(masterAddr)) {
+
+                        if (slaveAddr == null) {
+                            continue;
+                        }
 
                         getAndPrint(
-                                defaultMQAdminExt,
-                                String.format("============My Master: %s=====Slave: %s============\n", masterAndSlaveEntry.getKey(), slaveAddr),
-                                slaveAddr
+                            defaultMQAdminExt,
+                            String.format("============My Master: %s=====Slave: %s============\n", masterAddr, slaveAddr),
+                            slaveAddr
                         );
                     }
                 }
@@ -116,6 +124,10 @@ public class GetBrokerConfigCommand implements SubCommand {
         MQBrokerException, RemotingSendRequestException {
 
         System.out.print(printPrefix);
+
+        if (addr.equals(CommandUtil.NO_MASTER_PLACEHOLDER)) {
+            return;
+        }
 
         Properties properties = defaultMQAdminExt.getBrokerConfig(addr);
         if (properties == null) {

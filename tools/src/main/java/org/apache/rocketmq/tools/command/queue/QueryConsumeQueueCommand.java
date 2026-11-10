@@ -17,15 +17,17 @@
 
 package org.apache.rocketmq.tools.command.queue;
 
-import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
 import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
-import org.apache.commons.cli.PosixParser;
-import org.apache.rocketmq.common.protocol.body.ConsumeQueueData;
-import org.apache.rocketmq.common.protocol.body.QueryConsumeQueueResponseBody;
-import org.apache.rocketmq.common.protocol.route.TopicRouteData;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.rocketmq.remoting.RPCHook;
+import org.apache.rocketmq.remoting.protocol.body.ConsumeQueueData;
+import org.apache.rocketmq.remoting.protocol.body.QueryConsumeQueueResponseBody;
+import org.apache.rocketmq.remoting.protocol.route.TopicRouteData;
 import org.apache.rocketmq.srvutil.ServerUtil;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.apache.rocketmq.tools.command.SubCommand;
@@ -39,7 +41,7 @@ public class QueryConsumeQueueCommand implements SubCommand {
         String[] subargs = new String[] {"-t TopicTest", "-q 0", "-i 6447", "-b 100.81.165.119:10911"};
         final CommandLine commandLine =
             ServerUtil.parseCmdLine("mqadmin " + cmd.commandName(), subargs, cmd.buildCommandlineOptions(options),
-                new PosixParser());
+                new DefaultParser());
         cmd.execute(commandLine, options, null);
     }
 
@@ -104,7 +106,7 @@ public class QueryConsumeQueueCommand implements SubCommand {
                 consumerGroup = commandLine.getOptionValue("g").trim();
             }
 
-            if (broker == null || broker == "") {
+            if (StringUtils.isEmpty(broker)) {
                 TopicRouteData topicRouteData = defaultMQAdminExt.examineTopicRouteInfo(topic);
 
                 if (topicRouteData == null || topicRouteData.getBrokerDatas() == null
@@ -120,7 +122,7 @@ public class QueryConsumeQueueCommand implements SubCommand {
             );
 
             if (queryConsumeQueueResponseBody.getSubscriptionData() != null) {
-                System.out.printf("Subscription data: \n%s\n", JSON.toJSONString(queryConsumeQueueResponseBody.getSubscriptionData(), true));
+                System.out.printf("Subscription data: \n%s\n", JSON.toJSONString(queryConsumeQueueResponseBody.getSubscriptionData(), JSONWriter.Feature.PrettyFormat));
                 System.out.print("======================================\n");
             }
 

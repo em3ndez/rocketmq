@@ -16,14 +16,15 @@
  */
 package org.apache.rocketmq.store;
 
-
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Supplier;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.UtilAll;
 import org.apache.rocketmq.store.config.MessageStoreConfig;
+import org.apache.rocketmq.store.logfile.MappedFile;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -36,15 +37,21 @@ public class MultiPathMappedFileQueue extends MappedFileQueue {
     private final Supplier<Set<String>> fullStorePathsSupplier;
 
     public MultiPathMappedFileQueue(MessageStoreConfig messageStoreConfig, int mappedFileSize,
+        AllocateMappedFileService allocateMappedFileService,
+        Supplier<Set<String>> fullStorePathsSupplier) {
+        this(messageStoreConfig, mappedFileSize, allocateMappedFileService, fullStorePathsSupplier, null);
+    }
+    public MultiPathMappedFileQueue(MessageStoreConfig messageStoreConfig, int mappedFileSize,
                                     AllocateMappedFileService allocateMappedFileService,
-                                    Supplier<Set<String>> fullStorePathsSupplier) {
-        super(messageStoreConfig.getStorePathCommitLog(), mappedFileSize, allocateMappedFileService);
+                                    Supplier<Set<String>> fullStorePathsSupplier, RunningFlags runningFlags) {
+        super(messageStoreConfig.getStorePathCommitLog(), mappedFileSize, allocateMappedFileService, runningFlags,
+              messageStoreConfig.isWriteWithoutMmap());
         this.config = messageStoreConfig;
         this.fullStorePathsSupplier = fullStorePathsSupplier;
     }
 
     private Set<String> getPaths() {
-        String[] paths = config.getStorePathCommitLog().trim().split(MessageStoreConfig.MULTI_PATH_SPLITTER);
+        String[] paths = config.getStorePathCommitLog().trim().split(MixAll.MULTI_PATH_SPLITTER);
         return new HashSet<>(Arrays.asList(paths));
     }
 
@@ -53,7 +60,7 @@ public class MultiPathMappedFileQueue extends MappedFileQueue {
         if (StringUtils.isBlank(pathStr)) {
             return Collections.emptySet();
         }
-        String[] paths = pathStr.trim().split(MessageStoreConfig.MULTI_PATH_SPLITTER);
+        String[] paths = pathStr.trim().split(MixAll.MULTI_PATH_SPLITTER);
         return new HashSet<>(Arrays.asList(paths));
     }
 
@@ -75,7 +82,7 @@ public class MultiPathMappedFileQueue extends MappedFileQueue {
     }
 
     @Override
-    protected MappedFile tryCreateMappedFile(long createOffset) {
+    public MappedFile tryCreateMappedFile(long createOffset) {
         long fileIdx = createOffset / this.mappedFileSize;
         Set<String> storePath = getPaths();
         Set<String> readonlyPathSet = getReadonlyPaths();
@@ -111,8 +118,7 @@ public class MultiPathMappedFileQueue extends MappedFileQueue {
             mf.destroy(1000 * 3);
         }
         this.mappedFiles.clear();
-        this.flushedWhere = 0;
-
+        this.setFlushedWhere(0);
 
         Set<String> storePathSet = getPaths();
         storePathSet.addAll(getReadonlyPaths());

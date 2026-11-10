@@ -70,7 +70,7 @@ public class ConsumeMessageCommand implements SubCommand {
 
     @Override
     public String commandDesc() {
-        return "Consume message";
+        return "Consume message.";
     }
 
     @Override
@@ -267,7 +267,7 @@ public class ConsumeMessageCommand implements SubCommand {
                     maxOffset = minOffset + countLeft - 1;
                     countLeft = 0;
                 } else {
-                    countLeft = countLeft - (maxOffset - minOffset) - 1;
+                    countLeft = countLeft - (maxOffset - minOffset);
                 }
 
                 pullMessageByQueue(mq, minOffset, maxOffset);

@@ -17,50 +17,61 @@
 
 package org.apache.rocketmq.tools.monitor;
 
+import org.apache.rocketmq.logging.org.slf4j.Logger;
+import org.apache.rocketmq.logging.org.slf4j.LoggerFactory;
+import org.apache.rocketmq.remoting.protocol.body.ConsumerRunningInfo;
+
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TreeMap;
-import org.apache.rocketmq.client.log.ClientLogger;
-import org.apache.rocketmq.logging.InternalLogger;
-import org.apache.rocketmq.common.protocol.body.ConsumerRunningInfo;
 
 public class DefaultMonitorListener implements MonitorListener {
     private final static String LOG_PREFIX = "[MONITOR] ";
     private final static String LOG_NOTIFY = LOG_PREFIX + " [NOTIFY] ";
-    private final InternalLogger log = ClientLogger.getLog();
+    private final Logger logger = LoggerFactory.getLogger(DefaultMonitorListener.class);
 
     public DefaultMonitorListener() {
     }
 
     @Override
     public void beginRound() {
-        log.info(LOG_PREFIX + "=========================================beginRound");
+        logger.info("{}=========================================beginRound", LOG_PREFIX);
     }
 
     @Override
     public void reportUndoneMsgs(UndoneMsgs undoneMsgs) {
-        log.info(String.format(LOG_PREFIX + "reportUndoneMsgs: %s", undoneMsgs));
+        logger.info("{}reportUndoneMsgs: {}", LOG_PREFIX, undoneMsgs);
     }
 
     @Override
     public void reportFailedMsgs(FailedMsgs failedMsgs) {
-        log.info(String.format(LOG_PREFIX + "reportFailedMsgs: %s", failedMsgs));
+        logger.info("{}reportFailedMsgs: {}", LOG_PREFIX, failedMsgs);
     }
 
     @Override
     public void reportDeleteMsgsEvent(DeleteMsgsEvent deleteMsgsEvent) {
-        log.info(String.format(LOG_PREFIX + "reportDeleteMsgsEvent: %s", deleteMsgsEvent));
+        logger.info("{}reportDeleteMsgsEvent: {}", LOG_PREFIX, deleteMsgsEvent);
     }
 
     @Override
     public void reportConsumerRunningInfo(TreeMap<String, ConsumerRunningInfo> criTable) {
+        if (criTable == null || criTable.isEmpty()) {
+            logger.warn("{}ConsumerRunningInfo is empty.", LOG_NOTIFY);
+            return;
+        }
+
+        ConsumerRunningInfo firstValue = criTable.firstEntry().getValue();
+        if (firstValue == null || firstValue.getProperties() == null) {
+            logger.warn("{}ConsumerRunningInfo entry is empty.", LOG_NOTIFY);
+            return;
+        }
+
+        String consumerGroup = firstValue.getProperties().getProperty("consumerGroup");
 
         {
             boolean result = ConsumerRunningInfo.analyzeSubscription(criTable);
             if (!result) {
-                log.info(String.format(LOG_NOTIFY
-                    + "reportConsumerRunningInfo: ConsumerGroup: %s, Subscription different", criTable
-                    .firstEntry().getValue().getProperties().getProperty("consumerGroup")));
+                logger.info("{}reportConsumerRunningInfo: ConsumerGroup: {}, Subscription different", LOG_NOTIFY, consumerGroup);
             }
         }
 
@@ -70,11 +81,11 @@ public class DefaultMonitorListener implements MonitorListener {
                 Entry<String, ConsumerRunningInfo> next = it.next();
                 String result = ConsumerRunningInfo.analyzeProcessQueue(next.getKey(), next.getValue());
                 if (!result.isEmpty()) {
-                    log.info(String.format(LOG_NOTIFY
-                            + "reportConsumerRunningInfo: ConsumerGroup: %s, ClientId: %s, %s",
-                        criTable.firstEntry().getValue().getProperties().getProperty("consumerGroup"),
-                        next.getKey(),
-                        result));
+                    logger.info("{}reportConsumerRunningInfo: ConsumerGroup: {}, ClientId: {}, {}",
+                            LOG_NOTIFY,
+                            consumerGroup,
+                            next.getKey(),
+                            result);
                 }
             }
         }
@@ -82,6 +93,6 @@ public class DefaultMonitorListener implements MonitorListener {
 
     @Override
     public void endRound() {
-        log.info(LOG_PREFIX + "=========================================endRound");
+        logger.info("{}=========================================endRound", LOG_PREFIX);
     }
 }

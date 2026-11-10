@@ -27,6 +27,13 @@ public class StorePathConfigHelper {
     public static String getStorePathConsumeQueueExt(final String rootDir) {
         return rootDir + File.separator + "consumequeue_ext";
     }
+    public static String getStorePathBatchConsumeQueue(final String rootDir) {
+        return rootDir + File.separator + "batchconsumequeue";
+    }
+
+    public static String getStorePathRocksDBConsumeQueue(final String rootDir) {
+        return rootDir + File.separator + "consumequeue_rocksdb";
+    }
 
     public static String getStorePathIndex(final String rootDir) {
         return rootDir + File.separator + "index";

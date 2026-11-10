@@ -16,28 +16,42 @@
  */
 package org.apache.rocketmq.remoting.protocol;
 
-import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
+
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 public abstract class RemotingSerializable {
     private final static Charset CHARSET_UTF8 = StandardCharsets.UTF_8;
 
     public static byte[] encode(final Object obj) {
-        final String json = toJson(obj, false);
-        if (json != null) {
-            return json.getBytes(CHARSET_UTF8);
+        if (obj == null) {
+            return null;
         }
-        return null;
+        return JSON.toJSONBytes(obj, CHARSET_UTF8);
     }
 
     public static String toJson(final Object obj, boolean prettyFormat) {
-        return JSON.toJSONString(obj, prettyFormat);
+        if (prettyFormat) {
+            return JSON.toJSONString(obj, JSONWriter.Feature.PrettyFormat);
+        }
+        return JSON.toJSONString(obj);
     }
 
     public static <T> T decode(final byte[] data, Class<T> classOfT) {
-        final String json = new String(data, CHARSET_UTF8);
-        return fromJson(json, classOfT);
+        if (data == null) {
+            return null;
+        }
+        return JSON.parseObject(data, classOfT);
+    }
+
+    public static <T> List<T> decodeList(final byte[] data, Class<T> classOfT) {
+        if (data == null) {
+            return null;
+        }
+        return JSON.parseArray(data, 0, data.length, CHARSET_UTF8, classOfT);
     }
 
     public static <T> T fromJson(String json, Class<T> classOfT) {
@@ -45,11 +59,17 @@ public abstract class RemotingSerializable {
     }
 
     public byte[] encode() {
-        final String json = this.toJson();
-        if (json != null) {
-            return json.getBytes(CHARSET_UTF8);
-        }
-        return null;
+        return JSON.toJSONBytes(this, CHARSET_UTF8);
+    }
+
+    /**
+     * Allow call-site to apply specific features according to their requirements.
+     *
+     * @param features Features to apply
+     * @return serialized data.
+     */
+    public byte[] encode(JSONWriter.Feature... features) {
+        return JSON.toJSONBytes(this, CHARSET_UTF8, features);
     }
 
     public String toJson() {

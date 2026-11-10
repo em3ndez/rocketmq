@@ -21,7 +21,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.rocketmq.common.UtilAll;
-import org.apache.rocketmq.logging.InternalLogger;
+import org.apache.rocketmq.logging.org.slf4j.Logger;
 
 public class MomentStatsItem {
 
@@ -30,10 +30,11 @@ public class MomentStatsItem {
     private final String statsName;
     private final String statsKey;
     private final ScheduledExecutorService scheduledExecutorService;
-    private final InternalLogger log;
+    private final Logger log;
+    private long lastUpdateTimestamp = System.currentTimeMillis();
 
     public MomentStatsItem(String statsName, String statsKey,
-        ScheduledExecutorService scheduledExecutorService, InternalLogger log) {
+        ScheduledExecutorService scheduledExecutorService, Logger log) {
         this.statsName = statsName;
         this.statsKey = statsKey;
         this.scheduledExecutorService = scheduledExecutorService;
@@ -55,10 +56,10 @@ public class MomentStatsItem {
     }
 
     public void printAtMinutes() {
-        log.info(String.format("[%s] [%s] Stats Every 5 Minutes, Value: %d",
+        log.info("[{}] [{}] Stats Every 5 Minutes, Value: {}",
             this.statsName,
             this.statsKey,
-            this.value.get()));
+            this.value.get());
     }
 
     public AtomicLong getValue() {
@@ -71,5 +72,13 @@ public class MomentStatsItem {
 
     public String getStatsName() {
         return statsName;
+    }
+
+    public long getLastUpdateTimestamp() {
+        return lastUpdateTimestamp;
+    }
+
+    public void setLastUpdateTimestamp(long lastUpdateTimestamp) {
+        this.lastUpdateTimestamp = lastUpdateTimestamp;
     }
 }

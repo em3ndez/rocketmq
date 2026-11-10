@@ -21,20 +21,24 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.rocketmq.common.UtilAll;
 import org.apache.rocketmq.common.constant.LoggerName;
-import org.apache.rocketmq.logging.InternalLogger;
-import org.apache.rocketmq.logging.InternalLoggerFactory;
+import org.apache.rocketmq.logging.org.slf4j.Logger;
+import org.apache.rocketmq.logging.org.slf4j.LoggerFactory;
 import org.apache.rocketmq.common.message.MessageConst;
 import org.apache.rocketmq.common.sysflag.MessageSysFlag;
+import org.apache.rocketmq.store.CommitLogDispatchStore;
 import org.apache.rocketmq.store.DefaultMessageStore;
 import org.apache.rocketmq.store.DispatchRequest;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
+import org.rocksdb.RocksDBException;
 
-public class IndexService {
-    private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
+public class IndexService implements CommitLogDispatchStore {
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     /**
      * Maximum times to attempt index file creation.
      */
@@ -43,7 +47,7 @@ public class IndexService {
     private final int hashSlotNum;
     private final int indexNum;
     private final String storePath;
-    private final ArrayList<IndexFile> indexFileList = new ArrayList<IndexFile>();
+    private final ArrayList<IndexFile> indexFileList = new ArrayList<>();
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
     public IndexService(final DefaultMessageStore store) {
@@ -51,7 +55,7 @@ public class IndexService {
         this.hashSlotNum = store.getMessageStoreConfig().getMaxHashSlotNum();
         this.indexNum = store.getMessageStoreConfig().getMaxIndexNum();
         this.storePath =
-            StorePathConfigHelper.getStorePathIndex(store.getMessageStoreConfig().getStorePathRootDir());
+            StorePathConfigHelper.getStorePathIndex(defaultMessageStore.getMessageStoreConfig().getStorePathRootDir());
     }
 
     public boolean load(final boolean lastExitOK) {
@@ -73,18 +77,26 @@ public class IndexService {
                         }
                     }
 
-                    log.info("load index file OK, " + f.getFileName());
+                    LOGGER.info("load index file OK, " + f.getFileName());
                     this.indexFileList.add(f);
                 } catch (IOException e) {
-                    log.error("load file {} error", file, e);
+                    LOGGER.error("load file {} error", file, e);
                     return false;
                 } catch (NumberFormatException e) {
-                    log.error("load file {} error", file, e);
+                    LOGGER.error("load file {} error", file, e);
                 }
             }
         }
 
         return true;
+    }
+
+    public long getTotalSize() {
+        if (indexFileList.isEmpty()) {
+            return 0;
+        }
+
+        return (long) indexFileList.get(0).getFileSize() * indexFileList.size();
     }
 
     public void deleteExpiredFile(long offset) {
@@ -100,13 +112,13 @@ public class IndexService {
                 files = this.indexFileList.toArray();
             }
         } catch (Exception e) {
-            log.error("destroy exception", e);
+            LOGGER.error("destroy exception", e);
         } finally {
             this.readWriteLock.readLock().unlock();
         }
 
         if (files != null) {
-            List<IndexFile> fileList = new ArrayList<IndexFile>();
+            List<IndexFile> fileList = new ArrayList<>();
             for (int i = 0; i < (files.length - 1); i++) {
                 IndexFile f = (IndexFile) files[i];
                 if (f.getEndPhyOffset() < offset) {
@@ -128,12 +140,12 @@ public class IndexService {
                     boolean destroyed = file.destroy(3000);
                     destroyed = destroyed && this.indexFileList.remove(file);
                     if (!destroyed) {
-                        log.error("deleteExpiredFile remove failed.");
+                        LOGGER.error("deleteExpiredFile remove failed.");
                         break;
                     }
                 }
             } catch (Exception e) {
-                log.error("deleteExpiredFile has exception.", e);
+                LOGGER.error("deleteExpiredFile has exception.", e);
             } finally {
                 this.readWriteLock.writeLock().unlock();
             }
@@ -148,18 +160,21 @@ public class IndexService {
             }
             this.indexFileList.clear();
         } catch (Exception e) {
-            log.error("destroy exception", e);
+            LOGGER.error("destroy exception", e);
         } finally {
             this.readWriteLock.writeLock().unlock();
         }
     }
 
     public QueryOffsetResult queryOffset(String topic, String key, int maxNum, long begin, long end) {
-        List<Long> phyOffsets = new ArrayList<Long>(maxNum);
+        return queryOffset(topic, key, maxNum, begin, end, null);
+    }
 
+    public QueryOffsetResult queryOffset(String topic, String key, int maxNum, long begin, long end, String indexType) {
         long indexLastUpdateTimestamp = 0;
         long indexLastUpdatePhyoffset = 0;
         maxNum = Math.min(maxNum, this.defaultMessageStore.getMessageStoreConfig().getMaxMsgsNumBatch());
+        List<Long> phyOffsets = new ArrayList<>(maxNum);
         try {
             this.readWriteLock.readLock().lock();
             if (!this.indexFileList.isEmpty()) {
@@ -172,8 +187,13 @@ public class IndexService {
                     }
 
                     if (f.isTimeMatched(begin, end)) {
-
-                        f.selectPhyOffset(phyOffsets, buildKey(topic, key), maxNum, begin, end);
+                        String queryKey;
+                        if (!StringUtils.isEmpty(indexType) && MessageConst.INDEX_TAG_TYPE.equals(indexType)) {
+                            queryKey = buildKey(topic, key, MessageConst.INDEX_TAG_TYPE);
+                        } else {
+                            queryKey = buildKey(topic, key);
+                        }
+                        f.selectPhyOffset(phyOffsets, queryKey, maxNum, begin, end);
                     }
 
                     if (f.getBeginTimestamp() < begin) {
@@ -186,7 +206,7 @@ public class IndexService {
                 }
             }
         } catch (Exception e) {
-            log.error("queryMsg exception", e);
+            LOGGER.error("queryOffset exception", e);
         } finally {
             this.readWriteLock.readLock().unlock();
         }
@@ -196,6 +216,9 @@ public class IndexService {
 
     private String buildKey(final String topic, final String key) {
         return topic + "#" + key;
+    }
+    private String buildKey(final String topic, final String key, final String indexType) {
+        return topic + "#" + indexType + "#" + key;
     }
 
     public void buildIndex(DispatchRequest req) {
@@ -222,7 +245,7 @@ public class IndexService {
             if (req.getUniqKey() != null) {
                 indexFile = putKey(indexFile, msg, buildKey(topic, req.getUniqKey()));
                 if (indexFile == null) {
-                    log.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());
+                    LOGGER.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());
                     return;
                 }
             }
@@ -234,20 +257,33 @@ public class IndexService {
                     if (key.length() > 0) {
                         indexFile = putKey(indexFile, msg, buildKey(topic, key));
                         if (indexFile == null) {
-                            log.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());
+                            LOGGER.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());
                             return;
                         }
                     }
                 }
             }
+
+            Map<String, String> propertiesMap = req.getPropertiesMap();
+            if (null != propertiesMap && propertiesMap.containsKey(MessageConst.PROPERTY_TAGS)) {
+                String tags = req.getPropertiesMap().get(MessageConst.PROPERTY_TAGS);
+                if (!StringUtils.isEmpty(tags)) {
+                    indexFile = putKey(indexFile, msg, buildKey(topic, tags, MessageConst.INDEX_TAG_TYPE));
+                    if (indexFile == null) {
+                        LOGGER.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());
+                        return;
+                    }
+                }
+            }
+
         } else {
-            log.error("build index error, stop building index");
+            LOGGER.error("build index error, stop building index");
         }
     }
 
     private IndexFile putKey(IndexFile indexFile, DispatchRequest msg, String idxKey) {
         for (boolean ok = indexFile.putKey(idxKey, msg.getCommitLogOffset(), msg.getStoreTimestamp()); !ok; ) {
-            log.warn("Index file [" + indexFile.getFileName() + "] is full, trying to create another one");
+            LOGGER.warn("Index file [" + indexFile.getFileName() + "] is full, trying to create another one");
 
             indexFile = retryGetAndCreateIndexFile();
             if (null == indexFile) {
@@ -270,20 +306,21 @@ public class IndexService {
 
         for (int times = 0; null == indexFile && times < MAX_TRY_IDX_CREATE; times++) {
             indexFile = this.getAndCreateLastIndexFile();
-            if (null != indexFile)
+            if (null != indexFile) {
                 break;
+            }
 
             try {
-                log.info("Tried to create index file " + times + " times");
+                LOGGER.info("Tried to create index file " + times + " times");
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
-                log.error("Interrupted", e);
+                LOGGER.error("Interrupted", e);
             }
         }
 
         if (null == indexFile) {
-            this.defaultMessageStore.getAccessRights().makeIndexFileError();
-            log.error("Mark index file cannot build flag");
+            this.defaultMessageStore.getRunningFlags().makeIndexFileError();
+            LOGGER.error("Mark index file cannot build flag");
         }
 
         return indexFile;
@@ -322,13 +359,14 @@ public class IndexService {
                 this.readWriteLock.writeLock().lock();
                 this.indexFileList.add(indexFile);
             } catch (Exception e) {
-                log.error("getLastIndexFile exception ", e);
+                LOGGER.error("getLastIndexFile exception ", e);
             } finally {
                 this.readWriteLock.writeLock().unlock();
             }
 
             if (indexFile != null) {
                 final IndexFile flushThisFile = prevIndexFile;
+
                 Thread flushThread = new Thread(new Runnable() {
                     @Override
                     public void run() {
@@ -345,8 +383,9 @@ public class IndexService {
     }
 
     public void flush(final IndexFile f) {
-        if (null == f)
+        if (null == f) {
             return;
+        }
 
         long indexMsgTimestamp = 0;
 
@@ -367,6 +406,40 @@ public class IndexService {
     }
 
     public void shutdown() {
+        try {
+            this.readWriteLock.writeLock().lock();
+            for (IndexFile f : this.indexFileList) {
+                try {
+                    f.shutdown();
+                } catch (Exception e) {
+                    LOGGER.error("shutdown " + f.getFileName() + " exception", e);
+                }
+            }
+            this.indexFileList.clear();
+        } catch (Exception e) {
+            LOGGER.error("shutdown exception", e);
+        } finally {
+            this.readWriteLock.writeLock().unlock();
+        }
+    }
 
+    @Override
+    public Long getDispatchFromPhyOffset(boolean recoverNormally) throws RocksDBException {
+        return -1L;
+    }
+
+    @Override
+    public boolean isMappedFileMatchedRecover(long phyOffset, long storeTimestamp,
+        boolean recoverNormally) throws RocksDBException {
+        if (this.defaultMessageStore.getMessageStoreConfig().isMessageIndexEnable() &&
+            this.defaultMessageStore.getMessageStoreConfig().isMessageIndexSafe()) {
+            if (storeTimestamp > this.defaultMessageStore.getStoreCheckpoint().getIndexMsgTimestamp()) {
+                return false;
+            }
+            LOGGER.info("CommitLog isMmapFileMatchedRecover find satisfied MmapFile for index, " +
+                    "MmapFile storeTimestamp={}, MmapFile phyOffset={}, indexMsgTimestamp={}, recoverNormally={}",
+                storeTimestamp, phyOffset, this.defaultMessageStore.getStoreCheckpoint().getIndexMsgTimestamp(), recoverNormally);
+        }
+        return true;
     }
 }

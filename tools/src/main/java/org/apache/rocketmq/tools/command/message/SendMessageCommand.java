@@ -41,7 +41,7 @@ public class SendMessageCommand implements SubCommand {
 
     @Override
     public String commandDesc() {
-        return "Send a message";
+        return "Send a message.";
     }
 
     @Override
@@ -91,7 +91,7 @@ public class SendMessageCommand implements SubCommand {
     public void execute(CommandLine commandLine, Options options, RPCHook rpcHook) throws SubCommandException {
         Message msg = null;
         String topic = commandLine.getOptionValue('t').trim();
-        String body = commandLine.getOptionValue('p').trim();
+        String body = commandLine.getOptionValue('p');
         String tag = null;
         String keys = null;
         String brokerName = null;

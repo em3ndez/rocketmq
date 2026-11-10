@@ -19,30 +19,34 @@ package org.apache.rocketmq.store;
 import io.openmessaging.storage.dledger.store.file.DefaultMmapFile;
 import io.openmessaging.storage.dledger.store.file.MmapFile;
 import java.io.IOException;
-import java.util.List;
-import org.apache.commons.lang3.SystemUtils;
-import org.apache.rocketmq.logging.InternalLogger;
-import org.apache.rocketmq.logging.InternalLoggerFactory;
-import org.apache.rocketmq.store.index.IndexFile;
-import org.apache.rocketmq.store.index.IndexService;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-
+import java.util.List;
+import org.apache.commons.lang3.SystemUtils;
+import org.apache.rocketmq.logging.org.slf4j.Logger;
+import org.apache.rocketmq.logging.org.slf4j.LoggerFactory;
+import org.apache.rocketmq.store.index.IndexFile;
+import org.apache.rocketmq.store.index.IndexService;
+import org.apache.rocketmq.store.queue.ConsumeQueueStore;
 
 public class StoreTestUtil {
 
-    private static final InternalLogger log = InternalLoggerFactory.getLogger(StoreTestUtil.class);
+    private static final Logger log = LoggerFactory.getLogger(StoreTestUtil.class);
 
     public static boolean isCommitLogAvailable(DefaultMessageStore store) {
         try {
+            Field serviceField = null;
+            if (store instanceof RocksDBMessageStore) {
+                serviceField = store.getClass().getSuperclass().getDeclaredField("reputMessageService");
+            } else {
+                serviceField = store.getClass().getDeclaredField("reputMessageService");
+            }
 
-            Field serviceField = store.getClass().getDeclaredField("reputMessageService");
             serviceField.setAccessible(true);
             DefaultMessageStore.ReputMessageService reputService =
-                    (DefaultMessageStore.ReputMessageService) serviceField.get(store);
+                (DefaultMessageStore.ReputMessageService) serviceField.get(store);
 
             Method method = DefaultMessageStore.ReputMessageService.class.getDeclaredMethod("isCommitLogAvailable");
             method.setAccessible(true);
@@ -53,14 +57,14 @@ public class StoreTestUtil {
     }
 
     public static void flushConsumeQueue(DefaultMessageStore store) throws Exception {
-        Field field = store.getClass().getDeclaredField("flushConsumeQueueService");
+        Field field = store.getQueueStore().getClass().getDeclaredField("flushConsumeQueueService");
         field.setAccessible(true);
-        DefaultMessageStore.FlushConsumeQueueService flushService = (DefaultMessageStore.FlushConsumeQueueService) field.get(store);
+        ConsumeQueueStore.FlushConsumeQueueService flushService = (ConsumeQueueStore.FlushConsumeQueueService) field.get(store.getQueueStore());
 
-        final int RETRY_TIMES_OVER = 3;
-        Method method = DefaultMessageStore.FlushConsumeQueueService.class.getDeclaredMethod("doFlush", int.class);
+        final int retryTimesOver = 3;
+        Method method = ConsumeQueueStore.FlushConsumeQueueService.class.getDeclaredMethod("doFlush", int.class);
         method.setAccessible(true);
-        method.invoke(flushService, RETRY_TIMES_OVER);
+        method.invoke(flushService, retryTimesOver);
     }
 
 
